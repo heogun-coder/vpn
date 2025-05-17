@@ -1,0 +1,47 @@
+    <!DOCTYPE html>
+    <html lang="ko">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>OpenVPN 웹 컨트롤러</title>
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>OpenVPN 웹 컨트롤러</h1>
+            </header>
+            
+            <main>
+                <div class="vpn-status">
+                    <h2>VPN 상태</h2>
+                    <div id="status-indicator" class="status-indicator {{ 'connected' if vpn_status == 'connected' else 'disconnected' }}">
+                        <span id="status-text">{{ '연결됨' if vpn_status == 'connected' else '연결되지 않음' }}</span>
+                    </div>
+                </div>
+                
+                <div class="vpn-controls">
+                    <button id="connect-btn" class="btn primary" {{ 'disabled' if vpn_status == 'connected' else '' }}>
+                        VPN 연결
+                    </button>
+                    <button id="disconnect-btn" class="btn danger" {{ 'disabled' if vpn_status != 'connected' else '' }}>
+                        VPN 연결 해제
+                    </button>
+                </div>
+                
+                <div class="info-panel">
+                    <h3>VPN 정보</h3>
+                    <p>탭이 활성화된 상태에서는 VPN 연결이 유지됩니다.</p>
+                    <p>활성 시간: <span id="active-time">0</span>초</p>
+                    <p>자동 연결 해제: 5분 후 (비활성 시)</p>
+                </div>
+            </main>
+            
+            <footer>
+                <p>AWS EC2 + OpenVPN Flask 애플리케이션</p>
+            </footer>
+        </div>
+        
+        <script src="{{ url_for('static', filename='js/vpn_control.js') }}"></script>
+    </body>
+    </html>
