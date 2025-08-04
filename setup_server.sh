@@ -1,73 +1,92 @@
 #!/bin/bash
 
-# EC2 인스턴스 초기 설정 및 OpenVPN + Flask 웹 서버 설치 스크립트
-# 사용법: sudo bash setup_server.sh
+# WireGuard VPN 서버 설정 스크립트
+# AWS EC2 t2.micro (Amazon Linux 2)용
 
-# 로그 파일 설정
-LOG_FILE="/var/log/vpn_setup.log"
-exec > >(tee -a "$LOG_FILE") 2>&1
+set -e
 
-echo "==== EC2 인스턴스 + OpenVPN + Flask 웹 서버 설치 스크립트 시작 ===="
-echo "현재 시간: $(date)"
+echo "🚀 WireGuard VPN 서버 설정을 시작합니다..."
 
 # 시스템 업데이트
-echo "시스템 패키지 업데이트 중..."
-yum update -y
+echo "📦 시스템 패키지 업데이트 중..."
+sudo yum update -y
 
-# 필요한 패키지 설치
-echo "필수 패키지 설치 중..."
-yum install -y python3 python3-pip git nano wget unzip
+# WireGuard 설치
+echo "🔧 WireGuard 설치 중..."
+sudo yum install -y wireguard-tools
 
-# OpenVPN 설치
-echo "OpenVPN 설치 중..."
-amazon-linux-extras install -y epel
-yum install -y openvpn easy-rsa
+# IP 포워딩 활성화
+echo "🌐 IP 포워딩 활성화 중..."
+echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 
-# Flask 애플리케이션 디렉토리 생성
-echo "Flask 애플리케이션 디렉토리 설정 중..."
-mkdir -p /opt/vpn_webapp
-cd /opt/vpn_webapp
+# iptables 규칙 설정
+echo "🛡️ iptables 규칙 설정 중..."
+sudo iptables -A FORWARD -i wg0 -j ACCEPT
+sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 
-# 필요한 Python 패키지 설치
-echo "Flask 및 필요한 Python 패키지 설치 중..."
-pip3 install flask
+# iptables 규칙 영구 저장 (Amazon Linux 2)
+echo "💾 iptables 규칙 영구 저장 중..."
+sudo service iptables save
 
-# 방화벽 설정
-echo "방화벽 설정 중..."
-if command -v firewall-cmd &> /dev/null; then
-    # Firewalld가 설치된 경우
-    systemctl start firewalld
-    systemctl enable firewalld
-    firewall-cmd --permanent --add-service=http
-    firewall-cmd --permanent --add-service=https
-    firewall-cmd --permanent --add-port=5000/tcp
-    firewall-cmd --permanent --add-port=1194/udp
-    firewall-cmd --reload
-    echo "방화벽 설정 완료"
-else
-    # iptables 사용
-    yum install -y iptables-services
-    systemctl start iptables
-    systemctl enable iptables
-    iptables -A INPUT -p tcp --dport 5000 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 80 -j ACCEPT
-    iptables -A INPUT -p tcp --dport 443 -j ACCEPT
-    iptables -A INPUT -p udp --dport 1194 -j ACCEPT
-    service iptables save
-    echo "iptables 설정 완료"
+# Python 3.11 설치 (필요한 경우)
+echo "🐍 Python 3.11 설치 중..."
+if ! command -v python3.11 &> /dev/null; then
+    sudo yum install -y python3.11 python3.11-pip
 fi
 
-# OpenVPN 디렉토리 준비
-echo "OpenVPN 설정 디렉토리 준비 중..."
-mkdir -p /etc/openvpn/client
-mkdir -p /etc/openvpn/easy-rsa
-cp -r /usr/share/easy-rsa/3/* /etc/openvpn/easy-rsa/
+# 애플리케이션 디렉토리 생성
+echo "📁 애플리케이션 디렉토리 설정 중..."
+sudo mkdir -p /opt/wireguard-manager
+sudo chown $USER:$USER /opt/wireguard-manager
 
-echo "==== 설치 스크립트 완료 ===="
-echo "다음 단계:"
-echo "1. OpenVPN 서버 구성 파일을 생성하세요"
-echo "2. easy-rsa를 사용하여 인증서를 생성하세요"
-echo "3. Flask 애플리케이션 파일을 /opt/vpn_webapp에 배치하고 실행하세요"
+# WireGuard 디렉토리 생성
+echo "🔐 WireGuard 디렉토리 생성 중..."
+sudo mkdir -p /etc/wireguard
+sudo chmod 700 /etc/wireguard
+
+# 애플리케이션에 sudo 권한 부여
+echo "🔑 sudo 권한 설정 중..."
+echo "$USER ALL=(ALL) NOPASSWD: /usr/bin/wg, /usr/bin/wg-quick, /usr/bin/ip, /usr/bin/iptables" | sudo tee /etc/sudoers.d/wireguard
+
+# 방화벽 설정 (EC2 보안 그룹에서도 설정 필요)
+echo "🔥 방화벽 설정 중..."
+sudo firewall-cmd --permanent --add-port=5000/tcp  # 웹 인터페이스
+sudo firewall-cmd --permanent --add-port=51820/udp # WireGuard
+sudo firewall-cmd --reload
+
+# 서비스 파일 생성
+echo "⚙️ 서비스 파일 생성 중..."
+sudo tee /etc/systemd/system/wireguard-manager.service > /dev/null <<EOF
+[Unit]
+Description=WireGuard VPN Manager
+After=network.target
+
+[Service]
+Type=simple
+User=$USER
+WorkingDirectory=/opt/wireguard-manager
+ExecStart=/usr/bin/python3.11 application.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 서비스 활성화
+echo "🔄 서비스 활성화 중..."
+sudo systemctl daemon-reload
+sudo systemctl enable wireguard-manager
+
+echo "✅ 서버 설정이 완료되었습니다!"
 echo ""
-echo "Flask 웹 애플리케이션을 실행하려면:"
-echo "cd /opt/vpn_webapp && python3 app.py"
+echo "📋 다음 단계:"
+echo "1. 애플리케이션 파일을 /opt/wireguard-manager/에 복사"
+echo "2. pip install -r requirements.txt 실행"
+echo "3. sudo systemctl start wireguard-manager로 서비스 시작"
+echo "4. http://your-ec2-ip:5000에서 웹 인터페이스 접속"
+echo ""
+echo "🔒 보안 그룹 설정:"
+echo "- 포트 5000 (TCP): 웹 인터페이스"
+echo "- 포트 51820 (UDP): WireGuard VPN"
