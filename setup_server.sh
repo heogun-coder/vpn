@@ -11,9 +11,9 @@ echo "🚀 WireGuard VPN 서버 설정을 시작합니다..."
 echo "📦 시스템 패키지 업데이트 중..."
 sudo yum update -y
 
-# WireGuard 설치
-echo "🔧 WireGuard 설치 중..."
-sudo yum install -y wireguard-tools
+# 필수 패키지 설치
+echo "🔧 필수 패키지 설치 중..."
+sudo yum install -y git python3.11 python3.11-pip python3.11-venv wireguard-tools
 
 # IP 포워딩 활성화
 echo "🌐 IP 포워딩 활성화 중..."
@@ -28,12 +28,6 @@ sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 # iptables 규칙 영구 저장 (Amazon Linux 2)
 echo "💾 iptables 규칙 영구 저장 중..."
 sudo service iptables save
-
-# Python 3.11 설치 (필요한 경우)
-echo "🐍 Python 3.11 설치 중..."
-if ! command -v python3.11 &> /dev/null; then
-    sudo yum install -y python3.11 python3.11-pip
-fi
 
 # 애플리케이션 디렉토리 생성
 echo "📁 애플리케이션 디렉토리 설정 중..."
@@ -55,7 +49,17 @@ sudo firewall-cmd --permanent --add-port=5000/tcp  # 웹 인터페이스
 sudo firewall-cmd --permanent --add-port=51820/udp # WireGuard
 sudo firewall-cmd --reload
 
-# 서비스 파일 생성
+# 가상환경 생성
+echo "🐍 Python 가상환경 생성 중..."
+cd /opt/wireguard-manager
+python3.11 -m venv venv
+source venv/bin/activate
+
+# pip 업그레이드
+echo "📦 pip 업그레이드 중..."
+pip install --upgrade pip
+
+# 서비스 파일 생성 (가상환경 사용)
 echo "⚙️ 서비스 파일 생성 중..."
 sudo tee /etc/systemd/system/wireguard-manager.service > /dev/null <<EOF
 [Unit]
@@ -66,7 +70,8 @@ After=network.target
 Type=simple
 User=$USER
 WorkingDirectory=/opt/wireguard-manager
-ExecStart=/usr/bin/python3.11 application.py
+Environment=PATH=/opt/wireguard-manager/venv/bin
+ExecStart=/opt/wireguard-manager/venv/bin/python application.py
 Restart=always
 RestartSec=10
 
@@ -82,10 +87,11 @@ sudo systemctl enable wireguard-manager
 echo "✅ 서버 설정이 완료되었습니다!"
 echo ""
 echo "📋 다음 단계:"
-echo "1. 애플리케이션 파일을 /opt/wireguard-manager/에 복사"
-echo "2. pip install -r requirements.txt 실행"
-echo "3. sudo systemctl start wireguard-manager로 서비스 시작"
-echo "4. http://your-ec2-ip:5000에서 웹 인터페이스 접속"
+echo "1. Git 저장소 클론: git clone [your-repo-url] /opt/wireguard-manager"
+echo "2. 가상환경 활성화: source /opt/wireguard-manager/venv/bin/activate"
+echo "3. 의존성 설치: pip install -r requirements.txt"
+echo "4. 서비스 시작: sudo systemctl start wireguard-manager"
+echo "5. http://your-ec2-ip:5000에서 웹 인터페이스 접속"
 echo ""
 echo "🔒 보안 그룹 설정:"
 echo "- 포트 5000 (TCP): 웹 인터페이스"

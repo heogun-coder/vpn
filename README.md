@@ -15,6 +15,7 @@ AWS EC2 t2.micro 인스턴스(Amazon Linux 2)에서 WireGuard VPN을 관리하�
 - WireGuard CLI 도구
 - AWS EC2 t2.micro 인스턴스 (Amazon Linux 2)
 - sudo 권한 (WireGuard 설정 변경용)
+- Git (배포용)
 
 ## 📁 프로젝트 구조
 
@@ -27,42 +28,74 @@ vpn/
 ├── templates/
 │   └── index.html         # 웹 UI
 ├── requirements.txt        # Python 의존성
+├── setup_server.sh        # 서버 초기 설정
+├── deploy.sh              # Git 배포 스크립트
 └── README.md
 ```
 
 ## 🚀 설치 및 실행
 
-### 1. 의존성 설치
+### 1. 서버 초기 설정
 
 ```bash
-# Python 패키지 설치
+# 서버 설정 스크립트 실행
+sudo bash setup_server.sh
+```
+
+이 스크립트는 다음을 수행합니다:
+- 시스템 패키지 업데이트
+- WireGuard, Python 3.11, Git 설치
+- IP 포워딩 활성화
+- iptables 규칙 설정
+- 가상환경 생성
+- systemd 서비스 설정
+
+### 2. Git을 통한 배포
+
+#### 방법 1: 자동 배포 스크립트 사용
+```bash
+# 저장소 URL 지정하여 배포
+sudo bash deploy.sh https://github.com/your-username/wireguard-manager.git
+
+# 또는 기본 URL 사용 (스크립트 내부 설정)
+sudo bash deploy.sh
+```
+
+#### 방법 2: 수동 배포
+```bash
+# 애플리케이션 디렉토리로 이동
+cd /opt/wireguard-manager
+
+# Git 저장소 클론
+git clone https://github.com/your-username/wireguard-manager.git .
+
+# 가상환경 활성화
+source venv/bin/activate
+
+# 의존성 설치
 pip install -r requirements.txt
 
-# WireGuard 설치 (Amazon Linux 2)
-sudo yum update -y
-sudo yum install -y wireguard-tools
+# 서비스 시작
+sudo systemctl start wireguard-manager
 ```
 
-### 2. 네트워크 설정
+### 3. 서비스 관리
 
 ```bash
-# IP 포워딩 활성화
-echo 'net.ipv4.ip_forward=1' | sudo tee -a /etc/sysctl.conf
-sudo sysctl -p
+# 서비스 시작
+sudo systemctl start wireguard-manager
 
-# iptables 규칙 설정 (선택사항)
-sudo iptables -A FORWARD -i wg0 -j ACCEPT
-sudo iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
-```
+# 서비스 중지
+sudo systemctl stop wireguard-manager
 
-### 3. 애플리케이션 실행
+# 서비스 재시작
+sudo systemctl restart wireguard-manager
 
-```bash
-# 개발 모드
-python application.py
+# 서비스 상태 확인
+sudo systemctl status wireguard-manager
 
-# 프로덕션 모드 (권장)
-gunicorn -w 4 -b 0.0.0.0:5000 application:app
+# 로그 확인
+sudo journalctl -u wireguard-manager -f
 ```
 
 ## 🔧 사용 방법
@@ -128,6 +161,16 @@ PersistentKeepalive = 25
 
 ## 🐛 문제 해결
 
+### 가상환경 문제
+```bash
+# 가상환경 재생성
+cd /opt/wireguard-manager
+rm -rf venv
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
 ### WireGuard 인터페이스 생성 실패
 ```bash
 # WireGuard 모듈 로드
@@ -150,6 +193,18 @@ sudo systemctl status wg-quick@wg0
 
 # 로그 확인
 sudo journalctl -u wg-quick@wg0 -f
+```
+
+### Git 배포 문제
+```bash
+# Git 저장소 상태 확인
+cd /opt/wireguard-manager
+git status
+git log --oneline -5
+
+# 강제 업데이트
+git fetch origin
+git reset --hard origin/main
 ```
 
 ## 📝 라이선스
