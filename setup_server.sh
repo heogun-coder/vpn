@@ -13,7 +13,10 @@ sudo yum update -y
 
 # 필수 패키지 설치
 echo "🔧 필수 패키지 설치 중..."
-sudo yum install -y git python3.11 python3.11-pip python3.11-venv wireguard-tools
+sudo yum install -y git python3.11 python3.11-pip python3.11-venv wireguard-tools iptables-services firewalld
+
+sudo systemctl start firewalld
+sudo systemctl enable firewalld
 
 # IP 포워딩 활성화
 echo "🌐 IP 포워딩 활성화 중..."
