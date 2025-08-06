@@ -3,6 +3,7 @@ import os
 import json
 import secrets
 import base64
+from datetime import datetime
 from cryptography.hazmat.primitives.asymmetric import x25519
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.serialization import NoEncryption
@@ -145,7 +146,7 @@ PostDown = iptables -D FORWARD -i wg0 -j ACCEPT; iptables -t nat -D POSTROUTING 
                 "private_key": peer_private_key,
                 "public_key": peer_public_key,
                 "ip": peer_ip,
-                "created_at": subprocess.run(["date"], capture_output=True, text=True).stdout.strip()
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             
             # 피어를 서버 설정에 추가
